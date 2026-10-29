@@ -1,0 +1,44 @@
+name: replica-slack-on-issue-create
+permissions:
+  issues: read
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  send-notification:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Send notification (simulated - no real webhook)
+        env:
+          SLACK_NOTIFY_TO_CDI_JIRA_WEBHOOK: ${{ secrets.SLACK_NOTIFY_TO_CDI_JIRA_WEBHOOK }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          REPOSITORY_NAME: ${{ github.repository }}
+          GITHUB_EVENT_ISSUE_HTML_URL: ${{ github.event.issue.html_url }}
+        run: |
+          python <<'EOF'
+          import os
+          import json
+          import re
+          def sanitize(text):
+              return re.sub(r'[*_`~<>]', lambda m: '\\' + m.group(0), re.sub(r'<[^>]*>', '', text))
+          title = sanitize(os.environ['ISSUE_TITLE'])
+          message = {
+              "text": f"New issue created in {os.environ['REPOSITORY_NAME']}: *{title}*\n{os.environ['GITHUB_EVENT_ISSUE_HTML_URL']}",
+              "REPOSITORY_NAME": os.environ['REPOSITORY_NAME'],
+              "GITHUB_ISSUE": os.environ['GITHUB_EVENT_ISSUE_HTML_URL'],
+              "ISSUE_TITLE": title
+          }
+          print("RAW_TITLE=[" + os.environ['ISSUE_TITLE'] + "]")
+          print("SANITIZED=[" + title + "]")
+          print("PAYLOAD=" + json.dumps(message))
+          print("WEBHOOK_SET=" + str(len(os.environ.get('SLACK_NOTIFY_TO_CDI_JIRA_WEBHOOK',''))))
+          EOF
+          echo "SIDE_EFFECT_CHECK=$(ls /tmp/pwned 2>/dev/null || echo none)"
+          echo "ENV_INJECT_CHECK=$(env | grep -c '^INJECTED_' || true)"
